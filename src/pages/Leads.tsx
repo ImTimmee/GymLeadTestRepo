@@ -5,15 +5,16 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLeads } from '@/hooks/useLeads';
-import { 
-  Users, 
-  Search, 
-  Download, 
-  Mail, 
-  Phone, 
+import {
+  Users,
+  Search,
+  Download,
+  Mail,
+  Phone,
   Calendar,
   Target,
-  ChevronDown
+  ChevronDown,
+  Eye,
 } from 'lucide-react';
 import {
   Table,
@@ -31,10 +32,15 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { LeadDetailsDialog } from '@/components/leads/LeadDetailsDialog';
 
 export default function Leads() {
   const { leads, loading } = useLeads();
   const [search, setSearch] = useState('');
+
+  // ✅ modal state
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const filteredLeads = leads.filter(lead => {
     const searchLower = search.toLowerCase();
@@ -231,6 +237,17 @@ export default function Leads() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              {/* ✅ NEW: View details */}
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setSelectedLeadId(lead.id);
+                                  setDetailsOpen(true);
+                                }}
+                              >
+                                <Eye className="w-4 h-4 mr-2" />
+                                View details
+                              </DropdownMenuItem>
+
                               {lead.email && (
                                 <DropdownMenuItem asChild>
                                   <a href={`mailto:${lead.email}`}>
@@ -258,6 +275,16 @@ export default function Leads() {
             )}
           </CardContent>
         </Card>
+
+        {/* ✅ NEW: Dialog */}
+        <LeadDetailsDialog
+          leadId={selectedLeadId}
+          open={detailsOpen}
+          onOpenChange={(open) => {
+            setDetailsOpen(open);
+            if (!open) setSelectedLeadId(null);
+          }}
+        />
       </div>
     </DashboardLayout>
   );
