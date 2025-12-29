@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { LeadDetailsDialog } from '@/components/leads/LeadDetailsDialog';
+import { LeadDetailsDialog } from '@/components/LeadDetailsDialog';
 
 export default function Leads() {
   const { leads, loading } = useLeads();
