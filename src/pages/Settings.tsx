@@ -7,8 +7,11 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useProfile } from '@/hooks/useProfile';
 import { useAuth } from '@/contexts/AuthContext';
-import { Palette, Building2, Mail, Calendar, Save } from 'lucide-react';
+import { Palette, Building2, Mail, Calendar, Save, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
+
+// ✅ PAS DIT PAD AAN NAAR JOUW PROJECT
+import { supabase } from "@/integrations/supabase/client";
 
 const accentColors = [
   { name: 'Lime', value: '#84cc16' },
@@ -31,6 +34,12 @@ export default function Settings() {
   const [calendlyLink, setCalendlyLink] = useState('');
   const [accentColor, setAccentColor] = useState('');
 
+  // ✅ Password change state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
+
   const handleSave = () => {
     updateProfile.mutate({
       business_name: businessName || profile?.business_name,
@@ -38,6 +47,60 @@ export default function Settings() {
       calendly_link: calendlyLink || profile?.calendly_link,
       accent_color: accentColor || profile?.accent_color,
     });
+  };
+
+  // ✅ Password change handler (Supabase: re-auth -> updateUser)
+  const handleChangePassword = async () => {
+    try {
+      if (!user?.email) {
+        toast.error('Je bent niet ingelogd.');
+        return;
+      }
+
+      if (newPassword.length < 8) {
+        toast.error('Nieuw wachtwoord moet minimaal 8 tekens zijn.');
+        return;
+      }
+
+      if (newPassword !== confirmNewPassword) {
+        toast.error('Nieuwe wachtwoorden komen niet overeen.');
+        return;
+      }
+
+      setChangingPassword(true);
+
+      // 1) Re-auth: check current password
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      });
+
+      if (signInError) {
+        toast.error('Huidig wachtwoord klopt niet.');
+        return;
+      }
+
+      // 2) Update password
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (updateError) {
+        toast.error(updateError.message);
+        return;
+      }
+
+      toast.success('Wachtwoord succesvol gewijzigd ✅');
+
+      // clear fields
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Er ging iets mis bij het wijzigen van je wachtwoord.');
+    } finally {
+      setChangingPassword(false);
+    }
   };
 
   if (loading) {
@@ -133,7 +196,7 @@ export default function Settings() {
                 ))}
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <Label>Custom Color</Label>
               <div className="flex gap-2">
@@ -155,7 +218,7 @@ export default function Settings() {
             {/* Preview */}
             <div className="space-y-2">
               <Label>Preview</Label>
-              <div 
+              <div
                 className="rounded-xl p-4 text-white"
                 style={{ backgroundColor: accentColor || profile?.accent_color || '#84cc16' }}
               >
@@ -197,8 +260,62 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        <Button 
-          onClick={handleSave} 
+        {/* ✅ Password change */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <KeyRound className="w-5 h-5 text-muted-foreground" />
+              Password
+            </CardTitle>
+            <CardDescription>Change your account password</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="currentPassword">Current password</Label>
+              <Input
+                id="currentPassword"
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="newPassword">New password</Label>
+              <Input
+                id="newPassword"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Min. 8 characters"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirmNewPassword">Confirm new password</Label>
+              <Input
+                id="confirmNewPassword"
+                type="password"
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+                placeholder="Repeat new password"
+              />
+            </div>
+
+            <Button
+              type="button"
+              onClick={handleChangePassword}
+              disabled={changingPassword || !currentPassword || !newPassword || !confirmNewPassword}
+              className="w-full"
+            >
+              {changingPassword ? 'Updating...' : 'Update password'}
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Button
+          onClick={handleSave}
           disabled={updateProfile.isPending}
           className="w-full gradient-primary"
         >
