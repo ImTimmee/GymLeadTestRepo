@@ -10,17 +10,18 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFlow, FlowQuestion } from '@/hooks/useFlow';
 import { useProfile } from '@/hooks/useProfile';
-import { 
-  MessageSquare, 
-  Plus, 
-  GripVertical, 
-  Trash2, 
+import {
+  MessageSquare,
+  Plus,
+  GripVertical,
+  Trash2,
   Save,
   Eye,
   ExternalLink,
   Copy,
   Check,
-  Settings2
+  Settings2,
+  Code2,
 } from 'lucide-react';
 import {
   Dialog,
@@ -50,11 +51,13 @@ const fieldTypes = [
 export default function FlowBuilder() {
   const { flow, flowLoading, questions, questionsLoading, updateFlow, addQuestion, updateQuestion, deleteQuestion } = useFlow();
   const { profile } = useProfile();
+
   const [welcomeMessage, setWelcomeMessage] = useState('');
   const [confirmationMessage, setConfirmationMessage] = useState('');
   const [gdprEnabled, setGdprEnabled] = useState(true);
   const [gdprText, setGdprText] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+
   const [newQuestion, setNewQuestion] = useState({
     question_text: '',
     field_name: '',
@@ -62,8 +65,13 @@ export default function FlowBuilder() {
     is_required: true,
     options: [] as string[],
   });
+
   const [optionsInput, setOptionsInput] = useState('');
   const [copied, setCopied] = useState(false);
+
+  // ✅ snippet dialog
+  const [snippetOpen, setSnippetOpen] = useState(false);
+  const [snippetCopied, setSnippetCopied] = useState(false);
 
   // Initialize form values when flow loads
   useState(() => {
@@ -94,7 +102,7 @@ export default function FlowBuilder() {
       return;
     }
 
-    const options = newQuestion.field_type === 'select' 
+    const options = newQuestion.field_type === 'select'
       ? optionsInput.split(',').map(o => o.trim()).filter(Boolean)
       : null;
 
@@ -112,6 +120,7 @@ export default function FlowBuilder() {
     setIsAddDialogOpen(false);
   };
 
+  // Existing share link (public chatbot)
   const widgetUrl = flow?.id ? `${window.location.origin}/chat/${flow.user_id}` : '';
 
   const handleCopyLink = () => {
@@ -119,6 +128,20 @@ export default function FlowBuilder() {
     setCopied(true);
     toast.success('Link copied to clipboard');
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  // ✅ Embed snippet
+  const embedScriptUrl = `${window.location.origin}/embed.js`;
+  const embedSnippet = `<script
+  src="${embedScriptUrl}"
+  data-chatbot-id="${flow?.user_id ?? ''}">
+</script>`;
+
+  const handleCopySnippet = () => {
+    navigator.clipboard.writeText(embedSnippet);
+    setSnippetCopied(true);
+    toast.success('Snippet copied to clipboard');
+    setTimeout(() => setSnippetCopied(false), 2000);
   };
 
   if (flowLoading) {
@@ -213,8 +236,8 @@ export default function FlowBuilder() {
                     </div>
                     <div className="space-y-2">
                       <Label>Field Type</Label>
-                      <Select 
-                        value={newQuestion.field_type} 
+                      <Select
+                        value={newQuestion.field_type}
                         onValueChange={(v) => setNewQuestion({ ...newQuestion, field_type: v })}
                       >
                         <SelectTrigger>
@@ -268,9 +291,9 @@ export default function FlowBuilder() {
               ) : (
                 <div className="space-y-3">
                   {questions.map((question, index) => (
-                    <QuestionItem 
-                      key={question.id} 
-                      question={question} 
+                    <QuestionItem
+                      key={question.id}
+                      question={question}
                       index={index}
                       onUpdate={(updates) => updateQuestion.mutate({ id: question.id, ...updates })}
                       onDelete={() => deleteQuestion.mutate(question.id)}
@@ -331,12 +354,12 @@ export default function FlowBuilder() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                {flow?.is_published 
-                  ? 'Your chatbot is live and collecting leads.' 
+                {flow?.is_published
+                  ? 'Your chatbot is live and collecting leads.'
                   : 'Publish your chatbot to start collecting leads.'}
               </p>
-              <Button 
-                onClick={handlePublish} 
+              <Button
+                onClick={handlePublish}
                 disabled={updateFlow.isPending}
                 variant={flow?.is_published ? 'outline' : 'default'}
                 className={!flow?.is_published ? 'w-full gradient-primary' : 'w-full'}
@@ -363,12 +386,59 @@ export default function FlowBuilder() {
                     {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                   </Button>
                 </div>
+
                 <Button variant="outline" className="w-full" asChild>
                   <a href={widgetUrl} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="w-4 h-4 mr-2" />
                     Open Chatbot
                   </a>
                 </Button>
+
+                {/* ✅ NEW: Get snippet */}
+                <Dialog open={snippetOpen} onOpenChange={setSnippetOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="w-full">
+                      <Code2 className="w-4 h-4 mr-2" />
+                      Get snippet
+                    </Button>
+                  </DialogTrigger>
+
+                  <DialogContent className="max-w-xl">
+                    <DialogHeader>
+                      <DialogTitle>Embed snippet</DialogTitle>
+                      <DialogDescription>
+                        Copy and paste this code into your website (WordPress/HTML).
+                      </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-3">
+                      <div className="rounded-lg border bg-muted/30 p-3">
+                        <pre className="text-xs whitespace-pre-wrap break-words">
+                          {embedSnippet}
+                        </pre>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs text-muted-foreground">
+                          This loads <span className="font-mono">{embedScriptUrl}</span>
+                        </p>
+                        <Button variant="default" onClick={handleCopySnippet}>
+                          {snippetCopied ? (
+                            <>
+                              <Check className="w-4 h-4 mr-2" />
+                              Copied
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-4 h-4 mr-2" />
+                              Copy snippet
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </CardContent>
             </Card>
           )}
@@ -379,7 +449,7 @@ export default function FlowBuilder() {
               <CardTitle className="text-lg">Preview</CardTitle>
             </CardHeader>
             <CardContent>
-              <div 
+              <div
                 className="rounded-xl p-4 text-white text-sm"
                 style={{ backgroundColor: profile?.accent_color || '#84cc16' }}
               >
@@ -394,13 +464,13 @@ export default function FlowBuilder() {
   );
 }
 
-function QuestionItem({ 
-  question, 
-  index, 
-  onUpdate, 
-  onDelete 
-}: { 
-  question: FlowQuestion; 
+function QuestionItem({
+  question,
+  index,
+  onUpdate,
+  onDelete
+}: {
+  question: FlowQuestion;
   index: number;
   onUpdate: (updates: Partial<FlowQuestion>) => void;
   onDelete: () => void;
