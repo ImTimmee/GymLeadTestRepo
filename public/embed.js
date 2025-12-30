@@ -2,15 +2,30 @@
   const script = document.currentScript;
   if (!script) return;
 
+  /**
+   * Gebruik bij voorkeur:
+   * data-chatbot-url="https://jouwdomein/chat/..."
+   * 
+   * Fallback:
+   * data-chatbot-id="..."
+   */
+  const chatbotUrlAttr = script.getAttribute("data-chatbot-url");
   const chatbotId = script.getAttribute("data-chatbot-id");
-  if (!chatbotId) {
-    console.error("Chatbot embed: data-chatbot-id ontbreekt");
-    return;
-  }
 
-  // Automatisch juiste domein (vercel nu, custom domain later)
-  const origin = new URL(script.src).origin;
-  const CHAT_URL = `${origin}/chat/${chatbotId}`;
+  let CHAT_URL = chatbotUrlAttr;
+
+  if (!CHAT_URL) {
+    if (!chatbotId) {
+      console.error(
+        "Chatbot embed error: provide data-chatbot-url OR data-chatbot-id"
+      );
+      return;
+    }
+
+    // automatisch juiste domein (vercel nu, custom domain later)
+    const origin = new URL(script.src).origin;
+    CHAT_URL = `${origin}/chat/${chatbotId}`;
+  }
 
   const Z_INDEX = "2147483647";
 
@@ -60,7 +75,8 @@
     padding: "0 10px",
     background: "#111827",
     color: "white",
-    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif",
+    fontFamily:
+      "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif",
     fontSize: "14px",
   });
 
