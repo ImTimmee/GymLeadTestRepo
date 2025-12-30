@@ -38,13 +38,11 @@ export default function Leads() {
   const { leads, loading } = useLeads();
   const [search, setSearch] = useState('');
 
-  // ✅ modal state
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
-  const filteredLeads = leads.filter(lead => {
+  const filteredLeads = leads.filter((lead) => {
     const searchLower = search.toLowerCase();
-    console.log("LEAD DEBUG:", lead);
     return (
       lead.name?.toLowerCase().includes(searchLower) ||
       lead.email?.toLowerCase().includes(searchLower) ||
@@ -60,7 +58,7 @@ export default function Leads() {
     }
 
     const headers = ['Name', 'Email', 'Phone', 'Goal', 'Date'];
-    const rows = leads.map(lead => [
+    const rows = leads.map((lead) => [
       lead.name || '',
       lead.email || '',
       lead.phone || '',
@@ -68,7 +66,7 @@ export default function Leads() {
       new Date(lead.created_at!).toLocaleDateString(),
     ]);
 
-    const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
+    const csv = [headers, ...rows].map((row) => row.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -95,28 +93,31 @@ export default function Leads() {
               </div>
             </CardContent>
           </Card>
+
           <Card>
             <CardContent className="p-4 flex items-center gap-4">
               <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
                 <Mail className="w-5 h-5 text-accent" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{leads.filter(l => l.email).length}</p>
+                <p className="text-2xl font-bold">{leads.filter((l) => l.email).length}</p>
                 <p className="text-xs text-muted-foreground">With Email</p>
               </div>
             </CardContent>
           </Card>
+
           <Card>
             <CardContent className="p-4 flex items-center gap-4">
               <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
                 <Phone className="w-5 h-5 text-green-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{leads.filter(l => l.phone).length}</p>
+                <p className="text-2xl font-bold">{leads.filter((l) => l.phone).length}</p>
                 <p className="text-xs text-muted-foreground">With Phone</p>
               </div>
             </CardContent>
           </Card>
+
           <Card>
             <CardContent className="p-4 flex items-center gap-4">
               <div className="w-10 h-10 rounded-lg bg-yellow-500/10 flex items-center justify-center">
@@ -124,7 +125,7 @@ export default function Leads() {
               </div>
               <div>
                 <p className="text-2xl font-bold">
-                  {leads.filter(l => {
+                  {leads.filter((l) => {
                     const date = new Date(l.created_at!);
                     const today = new Date();
                     return date.toDateString() === today.toDateString();
@@ -159,6 +160,7 @@ export default function Leads() {
               </Button>
             </div>
           </CardHeader>
+
           <CardContent>
             {loading ? (
               <div className="space-y-3">
@@ -169,9 +171,7 @@ export default function Leads() {
             ) : filteredLeads.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <Users className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-medium">
-                  {search ? 'No leads found' : 'No leads yet'}
-                </p>
+                <p className="text-lg font-medium">{search ? 'No leads found' : 'No leads yet'}</p>
                 <p className="text-sm">
                   {search ? 'Try adjusting your search' : 'Share your chatbot to start collecting leads'}
                 </p>
@@ -188,6 +188,7 @@ export default function Leads() {
                       <TableHead className="w-12"></TableHead>
                     </TableRow>
                   </TableHeader>
+
                   <TableBody>
                     {filteredLeads.map((lead) => (
                       <TableRow key={lead.id}>
@@ -199,6 +200,7 @@ export default function Leads() {
                             <span className="font-medium">{lead.name || 'Unknown'}</span>
                           </div>
                         </TableCell>
+
                         <TableCell>
                           <div className="space-y-1">
                             {lead.email && (
@@ -219,6 +221,7 @@ export default function Leads() {
                             )}
                           </div>
                         </TableCell>
+
                         <TableCell>
                           {lead.goal && (
                             <Badge variant="secondary" className="font-normal">
@@ -227,9 +230,11 @@ export default function Leads() {
                             </Badge>
                           )}
                         </TableCell>
+
                         <TableCell className="text-muted-foreground text-sm">
                           {new Date(lead.created_at!).toLocaleDateString()}
                         </TableCell>
+
                         <TableCell>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -237,8 +242,8 @@ export default function Leads() {
                                 <ChevronDown className="w-4 h-4" />
                               </Button>
                             </DropdownMenuTrigger>
+
                             <DropdownMenuContent align="end">
-                              {/* ✅ NEW: View details */}
                               <DropdownMenuItem
                                 onClick={() => {
                                   setSelectedLeadId(lead.id);
@@ -257,6 +262,7 @@ export default function Leads() {
                                   </a>
                                 </DropdownMenuItem>
                               )}
+
                               {lead.phone && (
                                 <DropdownMenuItem asChild>
                                   <a href={`tel:${lead.phone}`}>
@@ -277,7 +283,6 @@ export default function Leads() {
           </CardContent>
         </Card>
 
-        {/* ✅ NEW: Dialog */}
         <LeadDetailsDialog
           leadId={selectedLeadId}
           open={detailsOpen}
