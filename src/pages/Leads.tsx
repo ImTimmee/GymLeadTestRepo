@@ -44,6 +44,7 @@ export default function Leads() {
 
   const filteredLeads = leads.filter(lead => {
     const searchLower = search.toLowerCase();
+    console.log("LEAD DEBUG:", lead);
     return (
       lead.name?.toLowerCase().includes(searchLower) ||
       lead.email?.toLowerCase().includes(searchLower) ||
