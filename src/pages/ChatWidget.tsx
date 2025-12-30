@@ -24,6 +24,7 @@ interface FlowData {
   gdpr_enabled: boolean;
   gdpr_text: string;
   user_id: string;
+  is_published?: boolean;
 }
 
 interface Question {
@@ -42,10 +43,13 @@ interface Profile {
 }
 
 export default function ChatWidget() {
+  // Route param can be either a user_id OR a flow.id (we support both)
   const { userId } = useParams<{ userId: string }>();
+
   const [flow, setFlow] = useState<FlowData | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -57,24 +61,29 @@ export default function ChatWidget() {
     async function loadFlow() {
       if (!userId) return;
 
+      setLoading(true);
+
       try {
-        // Get flow
+        // ✅ Robust: accept either flow.id or flow.user_id in the URL param
         const { data: flowData, error: flowError } = await supabase
           .from('chatbot_flows')
           .select('*')
-          .eq('user_id', userId)
+          .or(`id.eq.${userId},user_id.eq.${userId}`)
           .eq('is_published', true)
           .maybeSingle();
 
         if (flowError) throw flowError;
+
         if (!flowData) {
-          setLoading(false);
+          setFlow(null);
+          setQuestions([]);
+          setProfile(null);
           return;
         }
 
-        setFlow(flowData);
+        setFlow(flowData as FlowData);
 
-        // Get questions
+        // Get questions for this flow
         const { data: questionsData, error: questionsError } = await supabase
           .from('flow_questions')
           .select('*')
@@ -82,16 +91,23 @@ export default function ChatWidget() {
           .order('order_index');
 
         if (questionsError) throw questionsError;
-        setQuestions(questionsData || []);
+        setQuestions((questionsData as Question[]) || []);
 
-        // Get profile
-        const { data: profileData } = await supabase
+        // ✅ IMPORTANT: profile + leads belong to the real owner user_id
+        const ownerUserId = flowData.user_id;
+
+        const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('business_name, accent_color')
-          .eq('user_id', userId)
+          .eq('user_id', ownerUserId)
           .maybeSingle();
 
-        setProfile(profileData);
+        if (profileError) {
+          // not fatal
+          console.warn('Profile load warning:', profileError);
+        }
+
+        setProfile((profileData as Profile) || null);
       } catch (error) {
         console.error('Error loading flow:', error);
         toast.error('Failed to load chatbot');
@@ -111,8 +127,12 @@ export default function ChatWidget() {
 
     setSubmitting(true);
     try {
+      // ✅ Use flow.user_id (owner) instead of route param
+      const ownerUserId = flow?.user_id;
+      if (!ownerUserId) throw new Error('Missing owner user id');
+
       const { error } = await supabase.from('leads').insert({
-        user_id: userId!,
+        user_id: ownerUserId,
         name: answers.name || null,
         email: answers.email || null,
         phone: answers.phone || null,
@@ -172,7 +192,7 @@ export default function ChatWidget() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="w-full max-w-md text-center space-y-6">
-          <div 
+          <div
             className="w-20 h-20 rounded-full mx-auto flex items-center justify-center"
             style={{ backgroundColor: accentColor }}
           >
@@ -180,9 +200,7 @@ export default function ChatWidget() {
           </div>
           <div className="space-y-2">
             <h1 className="text-2xl font-bold">{flow.confirmation_message}</h1>
-            <p className="text-muted-foreground">
-              We'll get back to you as soon as possible.
-            </p>
+            <p className="text-muted-foreground">We'll get back to you as soon as possible.</p>
           </div>
         </div>
       </div>
@@ -197,7 +215,7 @@ export default function ChatWidget() {
       <div className="w-full max-w-md space-y-6">
         {/* Header */}
         <div className="text-center space-y-3">
-          <div 
+          <div
             className="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center"
             style={{ backgroundColor: accentColor }}
           >
@@ -210,7 +228,7 @@ export default function ChatWidget() {
         <div className="space-y-4">
           {/* Welcome message */}
           {currentStep === 0 && (
-            <div 
+            <div
               className="rounded-2xl rounded-tl-none p-4 text-white max-w-[85%]"
               style={{ backgroundColor: accentColor }}
             >
@@ -221,7 +239,7 @@ export default function ChatWidget() {
           {/* Current question */}
           {currentQuestion && (
             <>
-              <div 
+              <div
                 className="rounded-2xl rounded-tl-none p-4 text-white max-w-[85%]"
                 style={{ backgroundColor: accentColor }}
               >
@@ -237,13 +255,17 @@ export default function ChatWidget() {
                   <Textarea
                     placeholder="Type your answer..."
                     value={answers[currentQuestion.field_name] || ''}
-                    onChange={(e) => setAnswers({ ...answers, [currentQuestion.field_name]: e.target.value })}
+                    onChange={(e) =>
+                      setAnswers({ ...answers, [currentQuestion.field_name]: e.target.value })
+                    }
                     className="min-h-24"
                   />
                 ) : currentQuestion.field_type === 'select' && currentQuestion.options ? (
                   <Select
                     value={answers[currentQuestion.field_name] || ''}
-                    onValueChange={(v) => setAnswers({ ...answers, [currentQuestion.field_name]: v })}
+                    onValueChange={(v) =>
+                      setAnswers({ ...answers, [currentQuestion.field_name]: v })
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select an option" />
@@ -258,18 +280,23 @@ export default function ChatWidget() {
                   </Select>
                 ) : (
                   <Input
-                    type={currentQuestion.field_type === 'email' ? 'email' : currentQuestion.field_type === 'phone' ? 'tel' : 'text'}
+                    type={
+                      currentQuestion.field_type === 'email'
+                        ? 'email'
+                        : currentQuestion.field_type === 'phone'
+                        ? 'tel'
+                        : 'text'
+                    }
                     placeholder={`Enter your ${currentQuestion.field_name.replace('_', ' ')}`}
                     value={answers[currentQuestion.field_name] || ''}
-                    onChange={(e) => setAnswers({ ...answers, [currentQuestion.field_name]: e.target.value })}
+                    onChange={(e) =>
+                      setAnswers({ ...answers, [currentQuestion.field_name]: e.target.value })
+                    }
                     onKeyDown={(e) => e.key === 'Enter' && handleNext()}
                   />
                 )}
-                <Button 
-                  onClick={handleNext} 
-                  className="w-full"
-                  style={{ backgroundColor: accentColor }}
-                >
+
+                <Button onClick={handleNext} className="w-full" style={{ backgroundColor: accentColor }}>
                   Continue
                 </Button>
               </div>
@@ -279,7 +306,7 @@ export default function ChatWidget() {
           {/* Final step - submit */}
           {isLastStep && (
             <div className="space-y-4">
-              <div 
+              <div
                 className="rounded-2xl rounded-tl-none p-4 text-white max-w-[85%]"
                 style={{ backgroundColor: accentColor }}
               >
@@ -299,8 +326,8 @@ export default function ChatWidget() {
                 </div>
               )}
 
-              <Button 
-                onClick={handleSubmit} 
+              <Button
+                onClick={handleSubmit}
                 disabled={submitting}
                 className="w-full"
                 style={{ backgroundColor: accentColor }}
@@ -318,8 +345,8 @@ export default function ChatWidget() {
             <div
               key={i}
               className="w-2 h-2 rounded-full transition-colors"
-              style={{ 
-                backgroundColor: i <= currentStep ? accentColor : 'hsl(var(--muted))'
+              style={{
+                backgroundColor: i <= currentStep ? accentColor : 'hsl(var(--muted))',
               }}
             />
           ))}
