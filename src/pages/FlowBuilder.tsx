@@ -1,15 +1,18 @@
-import { useState } from 'react';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { useFlow, FlowQuestion } from '@/hooks/useFlow';
-import { useProfile } from '@/hooks/useProfile';
+import { useEffect, useMemo, useState } from "react";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
+
+import { useFlow, FlowQuestion } from "@/hooks/useFlow";
+import { useProfile } from "@/hooks/useProfile";
+
 import {
   MessageSquare,
   Plus,
@@ -22,7 +25,8 @@ import {
   Check,
   Settings2,
   Code2,
-} from 'lucide-react';
+} from "lucide-react";
+
 import {
   Dialog,
   DialogContent,
@@ -30,120 +34,158 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
+
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { toast } from 'sonner';
+} from "@/components/ui/select";
 
 const fieldTypes = [
-  { value: 'text', label: 'Text Input' },
-  { value: 'email', label: 'Email' },
-  { value: 'phone', label: 'Phone Number' },
-  { value: 'select', label: 'Dropdown Select' },
-  { value: 'textarea', label: 'Long Text' },
+  { value: "text", label: "Text Input" },
+  { value: "email", label: "Email" },
+  { value: "phone", label: "Phone Number" },
+  { value: "select", label: "Dropdown Select" },
+  { value: "textarea", label: "Long Text" },
 ];
 
 export default function FlowBuilder() {
-  const { flow, flowLoading, questions, questionsLoading, updateFlow, addQuestion, updateQuestion, deleteQuestion } = useFlow();
+  const {
+    flow,
+    flowLoading,
+    questions,
+    questionsLoading,
+    updateFlow,
+    addQuestion,
+    updateQuestion,
+    deleteQuestion,
+  } = useFlow();
+
   const { profile } = useProfile();
 
-  const [welcomeMessage, setWelcomeMessage] = useState('');
-  const [confirmationMessage, setConfirmationMessage] = useState('');
+  const [welcomeMessage, setWelcomeMessage] = useState("");
+  const [confirmationMessage, setConfirmationMessage] = useState("");
   const [gdprEnabled, setGdprEnabled] = useState(true);
-  const [gdprText, setGdprText] = useState('');
+  const [gdprText, setGdprText] = useState("");
+
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [optionsInput, setOptionsInput] = useState("");
 
   const [newQuestion, setNewQuestion] = useState({
-    question_text: '',
-    field_name: '',
-    field_type: 'text',
+    question_text: "",
+    field_name: "",
+    field_type: "text",
     is_required: true,
-    options: [] as string[],
   });
 
-  const [optionsInput, setOptionsInput] = useState('');
-  const [copied, setCopied] = useState(false);
-
-  // ✅ snippet dialog
+  const [copiedLink, setCopiedLink] = useState(false);
   const [snippetOpen, setSnippetOpen] = useState(false);
-  const [snippetCopied, setSnippetCopied] = useState(false);
+  const [copiedSnippet, setCopiedSnippet] = useState(false);
 
-  // Initialize form values when flow loads
-  useState(() => {
-    if (flow) {
-      setWelcomeMessage(flow.welcome_message || '');
-      setConfirmationMessage(flow.confirmation_message || '');
-      setGdprEnabled(flow.gdpr_enabled ?? true);
-      setGdprText(flow.gdpr_text || '');
-    }
-  });
+  // ✅ Correct init: when flow loads, fill local state
+  useEffect(() => {
+    if (!flow) return;
+    setWelcomeMessage(flow.welcome_message || "");
+    setConfirmationMessage(flow.confirmation_message || "");
+    setGdprEnabled(flow.gdpr_enabled ?? true);
+    setGdprText(flow.gdpr_text || "");
+  }, [flow]);
+
+  const widgetUrl = useMemo(() => {
+    if (!flow?.is_published) return "";
+    // IMPORTANT: keep this consistent with "Open Chatbot"
+    // If your chat route expects flow.id instead, change this one line to flow.id
+    return `${window.location.origin}/chat/${flow.user_id}`;
+  }, [flow?.is_published, flow?.user_id]);
+
+  const embedScriptUrl = useMemo(() => `${window.location.origin}/embed.js`, []);
+
+  // ✅ IDIOT-PROOF: embed uses the SAME url as Open Chatbot
+  const embedSnippet = useMemo(() => {
+    if (!widgetUrl) return "";
+    return `<script
+  src="${embedScriptUrl}"
+  data-chatbot-url="${widgetUrl}">
+</script>`;
+  }, [embedScriptUrl, widgetUrl]);
 
   const handleSaveFlow = () => {
+    if (!flow) return;
     updateFlow.mutate({
-      welcome_message: welcomeMessage || flow?.welcome_message,
-      confirmation_message: confirmationMessage || flow?.confirmation_message,
+      welcome_message: welcomeMessage,
+      confirmation_message: confirmationMessage,
       gdpr_enabled: gdprEnabled,
-      gdpr_text: gdprText || flow?.gdpr_text,
+      gdpr_text: gdprText,
     });
   };
 
-  const handlePublish = () => {
-    updateFlow.mutate({ is_published: !flow?.is_published });
+  const handlePublishToggle = () => {
+    if (!flow) return;
+    updateFlow.mutate({ is_published: !flow.is_published });
   };
 
   const handleAddQuestion = () => {
-    if (!newQuestion.question_text || !newQuestion.field_name) {
-      toast.error('Please fill in all required fields');
+    if (!newQuestion.question_text.trim() || !newQuestion.field_name.trim()) {
+      toast.error("Please fill in Question Text and Field Name");
       return;
     }
 
-    const options = newQuestion.field_type === 'select'
-      ? optionsInput.split(',').map(o => o.trim()).filter(Boolean)
-      : null;
+    const options =
+      newQuestion.field_type === "select"
+        ? optionsInput
+            .split(",")
+            .map((o) => o.trim())
+            .filter(Boolean)
+        : null;
 
     addQuestion.mutate({
-      question_text: newQuestion.question_text,
-      field_name: newQuestion.field_name.toLowerCase().replace(/\s+/g, '_'),
+      question_text: newQuestion.question_text.trim(),
+      field_name: newQuestion.field_name.trim().toLowerCase().replace(/\s+/g, "_"),
       field_type: newQuestion.field_type,
       is_required: newQuestion.is_required,
       options,
       order_index: questions.length,
     });
 
-    setNewQuestion({ question_text: '', field_name: '', field_type: 'text', is_required: true, options: [] });
-    setOptionsInput('');
+    setNewQuestion({ question_text: "", field_name: "", field_type: "text", is_required: true });
+    setOptionsInput("");
     setIsAddDialogOpen(false);
   };
 
-  // Existing share link (public chatbot)
-  const widgetUrl = flow?.id ? `${window.location.origin}/chat/${flow.user_id}` : '';
-
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(widgetUrl);
-    setCopied(true);
-    toast.success('Link copied to clipboard');
-    setTimeout(() => setCopied(false), 2000);
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      return false;
+    }
   };
 
-  // ✅ Embed snippet
-  const widgetUrl = flow?.user_id ? `${window.location.origin}/chat/${flow.user_id}` : "";
-const embedScriptUrl = `${window.location.origin}/embed.js`;
+  const handleCopyLink = async () => {
+    if (!widgetUrl) return;
+    const ok = await copyToClipboard(widgetUrl);
+    if (!ok) {
+      toast.error("Copy failed");
+      return;
+    }
+    setCopiedLink(true);
+    toast.success("Link copied");
+    setTimeout(() => setCopiedLink(false), 1500);
+  };
 
-const embedSnippet = `<script
-  src="${embedScriptUrl}"
-  data-chatbot-url="${widgetUrl}">
-</script>`;
-
-  const handleCopySnippet = () => {
-    navigator.clipboard.writeText(embedSnippet);
-    setSnippetCopied(true);
-    toast.success('Snippet copied to clipboard');
-    setTimeout(() => setSnippetCopied(false), 2000);
+  const handleCopySnippet = async () => {
+    if (!embedSnippet) return;
+    const ok = await copyToClipboard(embedSnippet);
+    if (!ok) {
+      toast.error("Copy failed");
+      return;
+    }
+    setCopiedSnippet(true);
+    toast.success("Snippet copied");
+    setTimeout(() => setCopiedSnippet(false), 1500);
   };
 
   if (flowLoading) {
@@ -169,16 +211,13 @@ const embedSnippet = `<script
                 <MessageSquare className="w-5 h-5 text-primary" />
                 Messages
               </CardTitle>
-              <CardDescription>
-                Customize the messages your chatbot displays
-              </CardDescription>
+              <CardDescription>Customize the messages your chatbot displays</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Welcome Message</Label>
                 <Textarea
-                  placeholder="Hi! 👋 I'm here to help you get started..."
-                  value={welcomeMessage || flow?.welcome_message || ''}
+                  value={welcomeMessage}
                   onChange={(e) => setWelcomeMessage(e.target.value)}
                   rows={3}
                 />
@@ -186,8 +225,7 @@ const embedSnippet = `<script
               <div className="space-y-2">
                 <Label>Confirmation Message</Label>
                 <Textarea
-                  placeholder="Thanks! We'll be in touch soon."
-                  value={confirmationMessage || flow?.confirmation_message || ''}
+                  value={confirmationMessage}
                   onChange={(e) => setConfirmationMessage(e.target.value)}
                   rows={2}
                 />
@@ -200,10 +238,9 @@ const embedSnippet = `<script
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle>Questions</CardTitle>
-                <CardDescription>
-                  Add questions to collect information from leads
-                </CardDescription>
+                <CardDescription>Add questions to collect information from leads</CardDescription>
               </div>
+
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogTrigger asChild>
                   <Button size="sm" className="gradient-primary">
@@ -211,66 +248,81 @@ const embedSnippet = `<script
                     Add Question
                   </Button>
                 </DialogTrigger>
+
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Add New Question</DialogTitle>
-                    <DialogDescription>
-                      Create a new question to ask your leads
-                    </DialogDescription>
+                    <DialogDescription>Create a new question to ask your leads</DialogDescription>
                   </DialogHeader>
+
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label>Question Text</Label>
                       <Input
-                        placeholder="What's your name?"
                         value={newQuestion.question_text}
-                        onChange={(e) => setNewQuestion({ ...newQuestion, question_text: e.target.value })}
+                        onChange={(e) =>
+                          setNewQuestion((q) => ({ ...q, question_text: e.target.value }))
+                        }
+                        placeholder="What's your name?"
                       />
                     </div>
+
                     <div className="space-y-2">
                       <Label>Field Name</Label>
                       <Input
-                        placeholder="name"
                         value={newQuestion.field_name}
-                        onChange={(e) => setNewQuestion({ ...newQuestion, field_name: e.target.value })}
+                        onChange={(e) =>
+                          setNewQuestion((q) => ({ ...q, field_name: e.target.value }))
+                        }
+                        placeholder="name"
                       />
-                      <p className="text-xs text-muted-foreground">Used internally to identify this field</p>
+                      <p className="text-xs text-muted-foreground">
+                        Used internally (lowercase + underscores).
+                      </p>
                     </div>
+
                     <div className="space-y-2">
                       <Label>Field Type</Label>
                       <Select
                         value={newQuestion.field_type}
-                        onValueChange={(v) => setNewQuestion({ ...newQuestion, field_type: v })}
+                        onValueChange={(v) =>
+                          setNewQuestion((q) => ({ ...q, field_type: v }))
+                        }
                       >
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {fieldTypes.map((type) => (
-                            <SelectItem key={type.value} value={type.value}>
-                              {type.label}
+                          {fieldTypes.map((t) => (
+                            <SelectItem key={t.value} value={t.value}>
+                              {t.label}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
-                    {newQuestion.field_type === 'select' && (
+
+                    {newQuestion.field_type === "select" && (
                       <div className="space-y-2">
                         <Label>Options (comma-separated)</Label>
                         <Input
-                          placeholder="Option 1, Option 2, Option 3"
                           value={optionsInput}
                           onChange={(e) => setOptionsInput(e.target.value)}
+                          placeholder="Option 1, Option 2, Option 3"
                         />
                       </div>
                     )}
+
                     <div className="flex items-center gap-2">
                       <Switch
                         checked={newQuestion.is_required}
-                        onCheckedChange={(v) => setNewQuestion({ ...newQuestion, is_required: v })}
+                        onCheckedChange={(v) =>
+                          setNewQuestion((q) => ({ ...q, is_required: v }))
+                        }
                       />
                       <Label>Required field</Label>
                     </div>
+
                     <Button onClick={handleAddQuestion} className="w-full gradient-primary">
                       Add Question
                     </Button>
@@ -278,6 +330,7 @@ const embedSnippet = `<script
                 </DialogContent>
               </Dialog>
             </CardHeader>
+
             <CardContent>
               {questionsLoading ? (
                 <div className="space-y-3">
@@ -292,13 +345,13 @@ const embedSnippet = `<script
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {questions.map((question, index) => (
+                  {questions.map((q, idx) => (
                     <QuestionItem
-                      key={question.id}
-                      question={question}
-                      index={index}
-                      onUpdate={(updates) => updateQuestion.mutate({ id: question.id, ...updates })}
-                      onDelete={() => deleteQuestion.mutate(question.id)}
+                      key={q.id}
+                      question={q}
+                      index={idx}
+                      onUpdate={(updates) => updateQuestion.mutate({ id: q.id, ...updates })}
+                      onDelete={() => deleteQuestion.mutate(q.id)}
                     />
                   ))}
                 </div>
@@ -310,24 +363,19 @@ const embedSnippet = `<script
           <Card>
             <CardHeader>
               <CardTitle>GDPR Consent</CardTitle>
-              <CardDescription>
-                Add a consent checkbox for data collection
-              </CardDescription>
+              <CardDescription>Add a consent checkbox for data collection</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-2">
-                <Switch
-                  checked={gdprEnabled ?? flow?.gdpr_enabled ?? true}
-                  onCheckedChange={setGdprEnabled}
-                />
+                <Switch checked={gdprEnabled} onCheckedChange={setGdprEnabled} />
                 <Label>Enable GDPR consent checkbox</Label>
               </div>
-              {(gdprEnabled ?? flow?.gdpr_enabled) && (
+
+              {gdprEnabled && (
                 <div className="space-y-2">
                   <Label>Consent Text</Label>
                   <Textarea
-                    placeholder="I agree to the processing of my personal data."
-                    value={gdprText || flow?.gdpr_text || ''}
+                    value={gdprText}
                     onChange={(e) => setGdprText(e.target.value)}
                     rows={2}
                   />
@@ -345,47 +393,47 @@ const embedSnippet = `<script
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Publish card */}
-          <Card className={flow?.is_published ? 'border-green-500/50 bg-green-500/5' : ''}>
+          <Card className={flow?.is_published ? "border-green-500/50 bg-green-500/5" : ""}>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg">Status</CardTitle>
-                <Badge variant={flow?.is_published ? 'default' : 'secondary'}>
-                  {flow?.is_published ? 'Live' : 'Draft'}
+                <Badge variant={flow?.is_published ? "default" : "secondary"}>
+                  {flow?.is_published ? "Live" : "Draft"}
                 </Badge>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">
                 {flow?.is_published
-                  ? 'Your chatbot is live and collecting leads.'
-                  : 'Publish your chatbot to start collecting leads.'}
+                  ? "Your chatbot is live and collecting leads."
+                  : "Publish your chatbot to start collecting leads."}
               </p>
+
               <Button
-                onClick={handlePublish}
+                onClick={handlePublishToggle}
                 disabled={updateFlow.isPending}
-                variant={flow?.is_published ? 'outline' : 'default'}
-                className={!flow?.is_published ? 'w-full gradient-primary' : 'w-full'}
+                variant={flow?.is_published ? "outline" : "default"}
+                className={!flow?.is_published ? "w-full gradient-primary" : "w-full"}
               >
                 <Eye className="w-4 h-4 mr-2" />
-                {flow?.is_published ? 'Unpublish' : 'Publish Chatbot'}
+                {flow?.is_published ? "Unpublish" : "Publish Chatbot"}
               </Button>
             </CardContent>
           </Card>
 
           {/* Share link */}
-          {flow?.is_published && (
+          {flow?.is_published && widgetUrl && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Share Link</CardTitle>
-                <CardDescription>
-                  Share this link to let people access your chatbot
-                </CardDescription>
+                <CardDescription>Share this link to let people access your chatbot</CardDescription>
               </CardHeader>
+
               <CardContent className="space-y-3">
                 <div className="flex gap-2">
                   <Input value={widgetUrl} readOnly className="text-xs" />
                   <Button size="icon" variant="outline" onClick={handleCopyLink}>
-                    {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    {copiedLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                   </Button>
                 </div>
 
@@ -396,7 +444,7 @@ const embedSnippet = `<script
                   </a>
                 </Button>
 
-                {/* ✅ NEW: Get snippet */}
+                {/* ✅ Get snippet (idiot-proof uses data-chatbot-url) */}
                 <Dialog open={snippetOpen} onOpenChange={setSnippetOpen}>
                   <DialogTrigger asChild>
                     <Button variant="outline" className="w-full">
@@ -409,23 +457,22 @@ const embedSnippet = `<script
                     <DialogHeader>
                       <DialogTitle>Embed snippet</DialogTitle>
                       <DialogDescription>
-                        Copy and paste this code into your website (WordPress/HTML).
+                        Copy and paste this into your website (WordPress/HTML).
                       </DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-3">
                       <div className="rounded-lg border bg-muted/30 p-3">
-                        <pre className="text-xs whitespace-pre-wrap break-words">
-                          {embedSnippet}
-                        </pre>
+                        <pre className="text-xs whitespace-pre-wrap break-words">{embedSnippet}</pre>
                       </div>
 
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-xs text-muted-foreground">
-                          This loads <span className="font-mono">{embedScriptUrl}</span>
+                          Loads <span className="font-mono">{embedScriptUrl}</span>
                         </p>
-                        <Button variant="default" onClick={handleCopySnippet}>
-                          {snippetCopied ? (
+
+                        <Button onClick={handleCopySnippet}>
+                          {copiedSnippet ? (
                             <>
                               <Check className="w-4 h-4 mr-2" />
                               Copied
@@ -453,10 +500,10 @@ const embedSnippet = `<script
             <CardContent>
               <div
                 className="rounded-xl p-4 text-white text-sm"
-                style={{ backgroundColor: profile?.accent_color || '#84cc16' }}
+                style={{ backgroundColor: profile?.accent_color || "#84cc16" }}
               >
-                <p className="font-medium mb-2">{profile?.business_name || 'Your Business'}</p>
-                <p className="opacity-90">{welcomeMessage || flow?.welcome_message || 'Hi! 👋'}</p>
+                <p className="font-medium mb-2">{profile?.business_name || "Your Business"}</p>
+                <p className="opacity-90">{welcomeMessage || "Hi! 👋"}</p>
               </div>
             </CardContent>
           </Card>
@@ -470,7 +517,7 @@ function QuestionItem({
   question,
   index,
   onUpdate,
-  onDelete
+  onDelete,
 }: {
   question: FlowQuestion;
   index: number;
@@ -484,14 +531,17 @@ function QuestionItem({
         <p className="font-medium truncate">{question.question_text}</p>
         <div className="flex items-center gap-2 mt-1">
           <Badge variant="secondary" className="text-xs">
-            {fieldTypes.find(f => f.value === question.field_type)?.label || question.field_type}
+            {question.field_type}
           </Badge>
           {question.is_required && (
-            <Badge variant="outline" className="text-xs">Required</Badge>
+            <Badge variant="outline" className="text-xs">
+              Required
+            </Badge>
           )}
         </div>
       </div>
-      <Button variant="ghost" size="icon" onClick={onDelete}>
+
+      <Button variant="ghost" size="icon" onClick={onDelete} aria-label="Delete question">
         <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
       </Button>
     </div>
