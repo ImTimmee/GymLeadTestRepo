@@ -131,10 +131,12 @@ export default function FlowBuilder() {
   };
 
   // ✅ Embed snippet
-  const embedScriptUrl = `${window.location.origin}/embed.js`;
-  const embedSnippet = `<script
+  const widgetUrl = flow?.user_id ? `${window.location.origin}/chat/${flow.user_id}` : "";
+const embedScriptUrl = `${window.location.origin}/embed.js`;
+
+const embedSnippet = `<script
   src="${embedScriptUrl}"
-  data-chatbot-id="${flow?.user_id ?? ''}">
+  data-chatbot-url="${widgetUrl}">
 </script>`;
 
   const handleCopySnippet = () => {
