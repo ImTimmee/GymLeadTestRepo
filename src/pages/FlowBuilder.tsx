@@ -98,7 +98,7 @@ export default function FlowBuilder() {
     if (!flow?.is_published) return "";
     // IMPORTANT: keep this consistent with "Open Chatbot"
     // If your chat route expects flow.id instead, change this one line to flow.id
-    return `${window.location.origin}/chat/${flow.user_id}`;
+    return `${window.location.origin}/chat/${flow.id}`;
   }, [flow?.is_published, flow?.user_id]);
 
   const embedScriptUrl = useMemo(() => `${window.location.origin}/embed.js`, []);
