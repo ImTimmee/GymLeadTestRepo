@@ -43,7 +43,6 @@ interface Profile {
 }
 
 export default function ChatWidget() {
-  // Route param can be either a user_id OR a flow.id (we support both)
   const { userId } = useParams<{ userId: string }>();
 
   const [flow, setFlow] = useState<FlowData | null>(null);
@@ -58,65 +57,37 @@ export default function ChatWidget() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    async function loadFlow() {
+    async function loadPublicData() {
       if (!userId) return;
-
       setLoading(true);
 
       try {
-        // ✅ Robust: accept either flow.id or flow.user_id in the URL param
-        const { data: flowData, error: flowError } = await supabase
-          .from('chatbot_flows')
-          .select('*')
-          .or(`id.eq.${userId},user_id.eq.${userId}`)
-          .eq('is_published', true)
-          .maybeSingle();
-
-        if (flowError) throw flowError;
-
-        if (!flowData) {
+        const r = await fetch(`/api/chatbot/${encodeURIComponent(userId)}`);
+        if (r.status === 404) {
           setFlow(null);
           setQuestions([]);
           setProfile(null);
           return;
         }
 
-        setFlow(flowData as FlowData);
+        const data = await r.json();
+        if (!r.ok) throw new Error(data?.error || 'Failed to load chatbot');
 
-        // Get questions for this flow
-        const { data: questionsData, error: questionsError } = await supabase
-          .from('flow_questions')
-          .select('*')
-          .eq('flow_id', flowData.id)
-          .order('order_index');
-
-        if (questionsError) throw questionsError;
-        setQuestions((questionsData as Question[]) || []);
-
-        // ✅ IMPORTANT: profile + leads belong to the real owner user_id
-        const ownerUserId = flowData.user_id;
-
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('business_name, accent_color')
-          .eq('user_id', ownerUserId)
-          .maybeSingle();
-
-        if (profileError) {
-          // not fatal
-          console.warn('Profile load warning:', profileError);
-        }
-
-        setProfile((profileData as Profile) || null);
+        setFlow(data.flow as FlowData);
+        setQuestions((data.questions || []) as Question[]);
+        setProfile((data.profile || null) as Profile | null);
       } catch (error) {
         console.error('Error loading flow:', error);
         toast.error('Failed to load chatbot');
+        setFlow(null);
+        setQuestions([]);
+        setProfile(null);
       } finally {
         setLoading(false);
       }
     }
 
-    loadFlow();
+    loadPublicData();
   }, [userId]);
 
   const handleSubmit = async () => {
@@ -127,7 +98,6 @@ export default function ChatWidget() {
 
     setSubmitting(true);
     try {
-      // ✅ Use flow.user_id (owner) instead of route param
       const ownerUserId = flow?.user_id;
       if (!ownerUserId) throw new Error('Missing owner user id');
 
@@ -213,7 +183,6 @@ export default function ChatWidget() {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
-        {/* Header */}
         <div className="text-center space-y-3">
           <div
             className="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center"
@@ -224,9 +193,7 @@ export default function ChatWidget() {
           <h1 className="text-xl font-bold">{businessName}</h1>
         </div>
 
-        {/* Chat area */}
         <div className="space-y-4">
-          {/* Welcome message */}
           {currentStep === 0 && (
             <div
               className="rounded-2xl rounded-tl-none p-4 text-white max-w-[85%]"
@@ -236,7 +203,6 @@ export default function ChatWidget() {
             </div>
           )}
 
-          {/* Current question */}
           {currentQuestion && (
             <>
               <div
@@ -249,7 +215,6 @@ export default function ChatWidget() {
                 )}
               </div>
 
-              {/* Answer input */}
               <div className="ml-auto max-w-[85%] space-y-3">
                 {currentQuestion.field_type === 'textarea' ? (
                   <Textarea
@@ -303,7 +268,6 @@ export default function ChatWidget() {
             </>
           )}
 
-          {/* Final step - submit */}
           {isLastStep && (
             <div className="space-y-4">
               <div
@@ -339,7 +303,6 @@ export default function ChatWidget() {
           )}
         </div>
 
-        {/* Progress */}
         <div className="flex justify-center gap-1">
           {[...Array(questions.length + 1)].map((_, i) => (
             <div
