@@ -13,6 +13,7 @@ import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
 import ChatWidget from "./pages/ChatWidget";
 import NotFound from "./pages/NotFound";
+import EmbedChat from "@/pages/EmbedChat";
 
 const queryClient = new QueryClient();
 
@@ -33,11 +34,13 @@ const App = () => (
             <Route path="/settings" element={<Settings />} />
             <Route path="/chat/:userId" element={<ChatWidget />} />
             <Route path="*" element={<NotFound />} />
+            <Route path="/embed" element={<EmbedChat />} />
           </Routes>
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>
   </QueryClientProvider>
 );
+
 
 export default App;
