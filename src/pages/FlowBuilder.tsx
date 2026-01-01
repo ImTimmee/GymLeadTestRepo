@@ -54,7 +54,7 @@ const fieldTypes = [
 
 type FieldType = (typeof fieldTypes)[number]["value"];
 
-// unicode-safe base64 encode (browser)
+// ✅ unicode-safe base64 encode (browser)
 function utf8ToB64(str: string) {
   const bytes = new TextEncoder().encode(str);
   let bin = "";
@@ -95,7 +95,7 @@ export default function FlowBuilder() {
   const [snippetOpen, setSnippetOpen] = useState(false);
   const [copiedSnippet, setCopiedSnippet] = useState(false);
 
-  // init local form when flow loads
+  // fill local state when flow loads
   useEffect(() => {
     if (!flow) return;
     setWelcomeMessage(flow.welcome_message || "");
@@ -104,17 +104,14 @@ export default function FlowBuilder() {
     setGdprText(flow.gdpr_text || "");
   }, [flow]);
 
-  const embedScriptUrl = useMemo(() => `${window.location.origin}/embed.js`, []);
-
-  // Share link (what you already show)
+  // Share link (for your own testing / users)
   const widgetUrl = useMemo(() => {
     if (!flow?.is_published) return "";
-    // keep as you currently use in your product (user_id)
-    // If your /chat route expects flow.id instead, change to flow.id.
+    // keep consistent with your current route structure
     return `${window.location.origin}/chat/${flow.user_id}`;
   }, [flow?.is_published, flow?.user_id]);
 
-  // ✅ Self-contained embed snippet (NO database reads needed in public)
+  // ✅ NEW: self-contained snippet for embed.js + EmbedChat (/embed#...)
   const embedSnippet = useMemo(() => {
     if (!flow?.is_published) return "";
 
@@ -144,10 +141,8 @@ export default function FlowBuilder() {
 
     const b64 = utf8ToB64(JSON.stringify(cfg));
 
-    return `<script
-  src="${embedScriptUrl}"
-  data-config="${b64}">
-</script>`;
+    // cache bust parameter can be increased when you change embed.js
+    return `<script src="${window.location.origin}/embed.js?v=1" data-config="${b64}"></script>`;
   }, [
     flow?.is_published,
     flow?.id,
@@ -162,7 +157,6 @@ export default function FlowBuilder() {
     questions,
     profile?.business_name,
     profile?.accent_color,
-    embedScriptUrl,
   ]);
 
   const copyToClipboard = async (text: string) => {
@@ -378,11 +372,10 @@ export default function FlowBuilder() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {questions.map((q, idx) => (
+                  {questions.map((q) => (
                     <QuestionItem
                       key={q.id}
                       question={q}
-                      index={idx}
                       onUpdate={(updates) => updateQuestion.mutate({ id: q.id, ...updates })}
                       onDelete={() => deleteQuestion.mutate(q.id)}
                     />
@@ -450,30 +443,34 @@ export default function FlowBuilder() {
             </CardContent>
           </Card>
 
-          {/* Share link */}
-          {flow?.is_published && widgetUrl && (
+          {/* Share link + snippet */}
+          {flow?.is_published && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Share Link</CardTitle>
-                <CardDescription>Share this link to let people access your chatbot</CardDescription>
+                <CardTitle className="text-lg">Share & Embed</CardTitle>
+                <CardDescription>Share your chatbot link or embed it on your website</CardDescription>
               </CardHeader>
 
               <CardContent className="space-y-3">
-                <div className="flex gap-2">
-                  <Input value={widgetUrl} readOnly className="text-xs" />
-                  <Button size="icon" variant="outline" onClick={handleCopyLink}>
-                    {copiedLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                {/* Share link */}
+                <div className="space-y-2">
+                  <Label>Share link</Label>
+                  <div className="flex gap-2">
+                    <Input value={widgetUrl} readOnly className="text-xs" />
+                    <Button size="icon" variant="outline" onClick={handleCopyLink} disabled={!widgetUrl}>
+                      {copiedLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    </Button>
+                  </div>
+
+                  <Button variant="outline" className="w-full" asChild>
+                    <a href={widgetUrl} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      Open Chatbot
+                    </a>
                   </Button>
                 </div>
 
-                <Button variant="outline" className="w-full" asChild>
-                  <a href={widgetUrl} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    Open Chatbot
-                  </a>
-                </Button>
-
-                {/* ✅ Get snippet */}
+                {/* Get snippet */}
                 <Dialog open={snippetOpen} onOpenChange={setSnippetOpen}>
                   <DialogTrigger asChild>
                     <Button variant="outline" className="w-full">
@@ -486,7 +483,7 @@ export default function FlowBuilder() {
                     <DialogHeader>
                       <DialogTitle>Embed snippet</DialogTitle>
                       <DialogDescription>
-                        Copy and paste this into your website (WordPress/HTML).
+                        Copy and paste this into your website (WordPress / HTML).
                       </DialogDescription>
                     </DialogHeader>
 
@@ -497,7 +494,8 @@ export default function FlowBuilder() {
 
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-xs text-muted-foreground">
-                          Loads <span className="font-mono">{embedScriptUrl}</span>
+                          Tip: if you update embed.js, change <span className="font-mono">?v=1</span> to{" "}
+                          <span className="font-mono">?v=2</span> etc. (cache).
                         </p>
 
                         <Button onClick={handleCopySnippet} disabled={!embedSnippet}>
@@ -514,10 +512,6 @@ export default function FlowBuilder() {
                           )}
                         </Button>
                       </div>
-
-                      <p className="text-xs text-muted-foreground">
-                        Tip: this snippet is self-contained, so it works even if public database access is blocked.
-                      </p>
                     </div>
                   </DialogContent>
                 </Dialog>
@@ -548,12 +542,10 @@ export default function FlowBuilder() {
 
 function QuestionItem({
   question,
-  index,
   onUpdate,
   onDelete,
 }: {
   question: FlowQuestion;
-  index: number;
   onUpdate: (updates: Partial<FlowQuestion>) => void;
   onDelete: () => void;
 }) {
