@@ -50,7 +50,17 @@ const fieldTypes = [
   { value: "phone", label: "Phone Number" },
   { value: "select", label: "Dropdown Select" },
   { value: "textarea", label: "Long Text" },
-];
+] as const;
+
+type FieldType = (typeof fieldTypes)[number]["value"];
+
+// unicode-safe base64 encode (browser)
+function utf8ToB64(str: string) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = "";
+  bytes.forEach((b) => (bin += String.fromCharCode(b)));
+  return btoa(bin);
+}
 
 export default function FlowBuilder() {
   const {
@@ -77,7 +87,7 @@ export default function FlowBuilder() {
   const [newQuestion, setNewQuestion] = useState({
     question_text: "",
     field_name: "",
-    field_type: "text",
+    field_type: "text" as FieldType,
     is_required: true,
   });
 
@@ -85,7 +95,7 @@ export default function FlowBuilder() {
   const [snippetOpen, setSnippetOpen] = useState(false);
   const [copiedSnippet, setCopiedSnippet] = useState(false);
 
-  // ✅ Correct init: when flow loads, fill local state
+  // init local form when flow loads
   useEffect(() => {
     if (!flow) return;
     setWelcomeMessage(flow.welcome_message || "");
@@ -94,23 +104,93 @@ export default function FlowBuilder() {
     setGdprText(flow.gdpr_text || "");
   }, [flow]);
 
-  const widgetUrl = useMemo(() => {
-    if (!flow?.is_published) return "";
-    // IMPORTANT: keep this consistent with "Open Chatbot"
-    // If your chat route expects flow.id instead, change this one line to flow.id
-    return `${window.location.origin}/chat/${flow.id}`;
-  }, [flow?.is_published, flow?.user_id]);
-
   const embedScriptUrl = useMemo(() => `${window.location.origin}/embed.js`, []);
 
-  // ✅ IDIOT-PROOF: embed uses the SAME url as Open Chatbot
+  // Share link (what you already show)
+  const widgetUrl = useMemo(() => {
+    if (!flow?.is_published) return "";
+    // keep as you currently use in your product (user_id)
+    // If your /chat route expects flow.id instead, change to flow.id.
+    return `${window.location.origin}/chat/${flow.user_id}`;
+  }, [flow?.is_published, flow?.user_id]);
+
+  // ✅ Self-contained embed snippet (NO database reads needed in public)
   const embedSnippet = useMemo(() => {
-    if (!widgetUrl) return "";
+    if (!flow?.is_published) return "";
+
+    const cfg = {
+      flow: {
+        id: flow.id,
+        user_id: flow.user_id,
+        welcome_message: welcomeMessage || flow.welcome_message || "",
+        confirmation_message: confirmationMessage || flow.confirmation_message || "",
+        gdpr_enabled: gdprEnabled ?? true,
+        gdpr_text: gdprText || flow.gdpr_text || "",
+      },
+      questions: (questions || []).map((q) => ({
+        id: q.id,
+        question_text: q.question_text,
+        field_name: q.field_name,
+        field_type: q.field_type,
+        is_required: q.is_required,
+        options: q.options ?? null,
+        order_index: q.order_index,
+      })),
+      profile: {
+        business_name: profile?.business_name ?? null,
+        accent_color: profile?.accent_color ?? null,
+      },
+    };
+
+    const b64 = utf8ToB64(JSON.stringify(cfg));
+
     return `<script
   src="${embedScriptUrl}"
-  data-chatbot-url="${widgetUrl}">
+  data-config="${b64}">
 </script>`;
-  }, [embedScriptUrl, widgetUrl]);
+  }, [
+    flow?.is_published,
+    flow?.id,
+    flow?.user_id,
+    flow?.welcome_message,
+    flow?.confirmation_message,
+    flow?.gdpr_text,
+    welcomeMessage,
+    confirmationMessage,
+    gdprEnabled,
+    gdprText,
+    questions,
+    profile?.business_name,
+    profile?.accent_color,
+    embedScriptUrl,
+  ]);
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (!widgetUrl) return;
+    const ok = await copyToClipboard(widgetUrl);
+    if (!ok) return toast.error("Copy failed");
+    setCopiedLink(true);
+    toast.success("Link copied");
+    setTimeout(() => setCopiedLink(false), 1500);
+  };
+
+  const handleCopySnippet = async () => {
+    if (!embedSnippet) return;
+    const ok = await copyToClipboard(embedSnippet);
+    if (!ok) return toast.error("Copy failed");
+    setCopiedSnippet(true);
+    toast.success("Snippet copied");
+    setTimeout(() => setCopiedSnippet(false), 1500);
+  };
 
   const handleSaveFlow = () => {
     if (!flow) return;
@@ -155,39 +235,6 @@ export default function FlowBuilder() {
     setIsAddDialogOpen(false);
   };
 
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  const handleCopyLink = async () => {
-    if (!widgetUrl) return;
-    const ok = await copyToClipboard(widgetUrl);
-    if (!ok) {
-      toast.error("Copy failed");
-      return;
-    }
-    setCopiedLink(true);
-    toast.success("Link copied");
-    setTimeout(() => setCopiedLink(false), 1500);
-  };
-
-  const handleCopySnippet = async () => {
-    if (!embedSnippet) return;
-    const ok = await copyToClipboard(embedSnippet);
-    if (!ok) {
-      toast.error("Copy failed");
-      return;
-    }
-    setCopiedSnippet(true);
-    toast.success("Snippet copied");
-    setTimeout(() => setCopiedSnippet(false), 1500);
-  };
-
   if (flowLoading) {
     return (
       <DashboardLayout title="Flow Builder">
@@ -216,11 +263,7 @@ export default function FlowBuilder() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Welcome Message</Label>
-                <Textarea
-                  value={welcomeMessage}
-                  onChange={(e) => setWelcomeMessage(e.target.value)}
-                  rows={3}
-                />
+                <Textarea value={welcomeMessage} onChange={(e) => setWelcomeMessage(e.target.value)} rows={3} />
               </div>
               <div className="space-y-2">
                 <Label>Confirmation Message</Label>
@@ -260,9 +303,7 @@ export default function FlowBuilder() {
                       <Label>Question Text</Label>
                       <Input
                         value={newQuestion.question_text}
-                        onChange={(e) =>
-                          setNewQuestion((q) => ({ ...q, question_text: e.target.value }))
-                        }
+                        onChange={(e) => setNewQuestion((q) => ({ ...q, question_text: e.target.value }))}
                         placeholder="What's your name?"
                       />
                     </div>
@@ -271,23 +312,17 @@ export default function FlowBuilder() {
                       <Label>Field Name</Label>
                       <Input
                         value={newQuestion.field_name}
-                        onChange={(e) =>
-                          setNewQuestion((q) => ({ ...q, field_name: e.target.value }))
-                        }
+                        onChange={(e) => setNewQuestion((q) => ({ ...q, field_name: e.target.value }))}
                         placeholder="name"
                       />
-                      <p className="text-xs text-muted-foreground">
-                        Used internally (lowercase + underscores).
-                      </p>
+                      <p className="text-xs text-muted-foreground">Used internally (lowercase + underscores).</p>
                     </div>
 
                     <div className="space-y-2">
                       <Label>Field Type</Label>
                       <Select
                         value={newQuestion.field_type}
-                        onValueChange={(v) =>
-                          setNewQuestion((q) => ({ ...q, field_type: v }))
-                        }
+                        onValueChange={(v) => setNewQuestion((q) => ({ ...q, field_type: v as FieldType }))}
                       >
                         <SelectTrigger>
                           <SelectValue />
@@ -316,9 +351,7 @@ export default function FlowBuilder() {
                     <div className="flex items-center gap-2">
                       <Switch
                         checked={newQuestion.is_required}
-                        onCheckedChange={(v) =>
-                          setNewQuestion((q) => ({ ...q, is_required: v }))
-                        }
+                        onCheckedChange={(v) => setNewQuestion((q) => ({ ...q, is_required: v }))}
                       />
                       <Label>Required field</Label>
                     </div>
@@ -374,11 +407,7 @@ export default function FlowBuilder() {
               {gdprEnabled && (
                 <div className="space-y-2">
                   <Label>Consent Text</Label>
-                  <Textarea
-                    value={gdprText}
-                    onChange={(e) => setGdprText(e.target.value)}
-                    rows={2}
-                  />
+                  <Textarea value={gdprText} onChange={(e) => setGdprText(e.target.value)} rows={2} />
                 </div>
               )}
             </CardContent>
@@ -444,7 +473,7 @@ export default function FlowBuilder() {
                   </a>
                 </Button>
 
-                {/* ✅ Get snippet (idiot-proof uses data-chatbot-url) */}
+                {/* ✅ Get snippet */}
                 <Dialog open={snippetOpen} onOpenChange={setSnippetOpen}>
                   <DialogTrigger asChild>
                     <Button variant="outline" className="w-full">
@@ -471,7 +500,7 @@ export default function FlowBuilder() {
                           Loads <span className="font-mono">{embedScriptUrl}</span>
                         </p>
 
-                        <Button onClick={handleCopySnippet}>
+                        <Button onClick={handleCopySnippet} disabled={!embedSnippet}>
                           {copiedSnippet ? (
                             <>
                               <Check className="w-4 h-4 mr-2" />
@@ -485,6 +514,10 @@ export default function FlowBuilder() {
                           )}
                         </Button>
                       </div>
+
+                      <p className="text-xs text-muted-foreground">
+                        Tip: this snippet is self-contained, so it works even if public database access is blocked.
+                      </p>
                     </div>
                   </DialogContent>
                 </Dialog>
@@ -503,7 +536,7 @@ export default function FlowBuilder() {
                 style={{ backgroundColor: profile?.accent_color || "#84cc16" }}
               >
                 <p className="font-medium mb-2">{profile?.business_name || "Your Business"}</p>
-                <p className="opacity-90">{welcomeMessage || "Hi! 👋"}</p>
+                <p className="opacity-90">{welcomeMessage || flow?.welcome_message || "Hi! 👋"}</p>
               </div>
             </CardContent>
           </Card>
