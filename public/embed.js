@@ -2,38 +2,21 @@
   const script = document.currentScript;
   if (!script) return;
 
-  /**
-   * Gebruik bij voorkeur:
-   * data-chatbot-url="https://jouwdomein/chat/..."
-   * 
-   * Fallback:
-   * data-chatbot-id="..."
-   */
-  const chatbotUrlAttr = script.getAttribute("data-chatbot-url");
-  const chatbotId = script.getAttribute("data-chatbot-id");
-
-  let CHAT_URL = chatbotUrlAttr;
-
-  if (!CHAT_URL) {
-    if (!chatbotId) {
-      console.error(
-        "Chatbot embed error: provide data-chatbot-url OR data-chatbot-id"
-      );
-      return;
-    }
-
-    // automatisch juiste domein (vercel nu, custom domain later)
-    const origin = new URL(script.src).origin;
-    CHAT_URL = `${origin}/chat/${chatbotId}`;
+  // 🔑 NIEUW: we gebruiken data-config
+  const config = script.getAttribute("data-config");
+  if (!config) {
+    console.error("Embed error: missing data-config");
+    return;
   }
 
+  const origin = new URL(script.src).origin;
+  const EMBED_URL = `${origin}/embed#${config}`;
   const Z_INDEX = "2147483647";
 
   // ===== Open button =====
   const openBtn = document.createElement("button");
   openBtn.type = "button";
   openBtn.innerText = "💬 Chat";
-  openBtn.setAttribute("aria-label", "Open chat");
   Object.assign(openBtn.style, {
     position: "fixed",
     bottom: "20px",
@@ -75,8 +58,7 @@
     padding: "0 10px",
     background: "#111827",
     color: "white",
-    fontFamily:
-      "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif",
+    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif",
     fontSize: "14px",
   });
 
@@ -87,7 +69,6 @@
   const closeBtn = document.createElement("button");
   closeBtn.type = "button";
   closeBtn.innerText = "✕";
-  closeBtn.setAttribute("aria-label", "Close chat");
   Object.assign(closeBtn.style, {
     border: "none",
     background: "transparent",
@@ -95,38 +76,26 @@
     cursor: "pointer",
     fontSize: "18px",
     padding: "6px 8px",
-    borderRadius: "8px",
   });
-
-  closeBtn.onmouseenter = () => {
-    closeBtn.style.background = "rgba(255,255,255,0.12)";
-  };
-  closeBtn.onmouseleave = () => {
-    closeBtn.style.background = "transparent";
-  };
 
   header.appendChild(title);
   header.appendChild(closeBtn);
 
   // ===== Iframe =====
   const iframe = document.createElement("iframe");
-  iframe.src = CHAT_URL;
-  iframe.title = "Chatbot";
+  iframe.src = EMBED_URL;
   Object.assign(iframe.style, {
     width: "100%",
     height: "calc(100% - 44px)",
     border: "none",
-    display: "block",
   });
 
   container.appendChild(header);
   container.appendChild(iframe);
 
-  // ===== Mount =====
   document.body.appendChild(openBtn);
   document.body.appendChild(container);
 
-  // ===== Logic =====
   function openChat() {
     container.style.display = "block";
     openBtn.style.display = "none";
@@ -140,10 +109,7 @@
   openBtn.addEventListener("click", openChat);
   closeBtn.addEventListener("click", closeChat);
 
-  // ESC to close
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && container.style.display === "block") {
-      closeChat();
-    }
+    if (e.key === "Escape") closeChat();
   });
 })();
