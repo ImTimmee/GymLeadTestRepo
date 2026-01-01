@@ -104,14 +104,13 @@ export default function FlowBuilder() {
     setGdprText(flow.gdpr_text || "");
   }, [flow]);
 
-  // Share link (for your own testing / users)
+  // (Old share link) Keep if you want internally, but we will not use it for public anymore.
   const widgetUrl = useMemo(() => {
     if (!flow?.is_published) return "";
-    // keep consistent with your current route structure
     return `${window.location.origin}/chat/${flow.user_id}`;
   }, [flow?.is_published, flow?.user_id]);
 
-  // ✅ NEW: self-contained snippet for embed.js + EmbedChat (/embed#...)
+  // ✅ Self-contained snippet for embed.js + EmbedChat (/embed#...)
   const embedSnippet = useMemo(() => {
     if (!flow?.is_published) return "";
 
@@ -159,6 +158,16 @@ export default function FlowBuilder() {
     profile?.accent_color,
   ]);
 
+  // ✅ NEW: this is the link that actually works publicly
+  // https://gymlead.nl/embed#<data-config>
+  const embedLink = useMemo(() => {
+    if (!flow?.is_published) return "";
+    const match = embedSnippet.match(/data-config="([^"]+)"/);
+    const cfg = match?.[1];
+    if (!cfg) return "";
+    return `${window.location.origin}/embed#${cfg}`;
+  }, [flow?.is_published, embedSnippet]);
+
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -169,8 +178,8 @@ export default function FlowBuilder() {
   };
 
   const handleCopyLink = async () => {
-    if (!widgetUrl) return;
-    const ok = await copyToClipboard(widgetUrl);
+    if (!embedLink) return;
+    const ok = await copyToClipboard(embedLink);
     if (!ok) return toast.error("Copy failed");
     setCopiedLink(true);
     toast.success("Link copied");
@@ -448,26 +457,33 @@ export default function FlowBuilder() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Share & Embed</CardTitle>
-                <CardDescription>Share your chatbot link or embed it on your website</CardDescription>
+                <CardDescription>
+                  Share a public link (works for everyone) or embed it on your website
+                </CardDescription>
               </CardHeader>
 
               <CardContent className="space-y-3">
                 {/* Share link */}
                 <div className="space-y-2">
-                  <Label>Share link</Label>
+                  <Label>Share link (public)</Label>
                   <div className="flex gap-2">
-                    <Input value={widgetUrl} readOnly className="text-xs" />
-                    <Button size="icon" variant="outline" onClick={handleCopyLink} disabled={!widgetUrl}>
+                    <Input value={embedLink || ""} readOnly className="text-xs" />
+                    <Button size="icon" variant="outline" onClick={handleCopyLink} disabled={!embedLink}>
                       {copiedLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                     </Button>
                   </div>
 
                   <Button variant="outline" className="w-full" asChild>
-                    <a href={widgetUrl} target="_blank" rel="noopener noreferrer">
+                    <a href={embedLink || widgetUrl} target="_blank" rel="noopener noreferrer">
                       <ExternalLink className="w-4 h-4 mr-2" />
                       Open Chatbot
                     </a>
                   </Button>
+
+                  {/* Optional: show old link for your own debugging */}
+                  <p className="text-xs text-muted-foreground">
+                    Internal (may not work publicly): <span className="font-mono break-all">{widgetUrl}</span>
+                  </p>
                 </div>
 
                 {/* Get snippet */}
