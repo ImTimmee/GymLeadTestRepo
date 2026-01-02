@@ -1,17 +1,21 @@
-module.exports = async function handler(req, res) {
+import { getUserFromRequest } from "./_lib/auth.js";
+
+export default async function handler(req, res) {
   try {
-    // Lazy import zodat we errors kunnen vangen en teruggeven
-    const { getUserFromRequest } = require("./_lib/auth");
     const user = await getUserFromRequest(req);
-    res.status(200).json({ ok: true, user });
+    const body = JSON.stringify({ ok: true, user });
+
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "application/json");
+    res.end(body);
   } catch (e) {
-    res
-      .status(500)
-      .json({
-        ok: false,
-        error: e && e.message ? e.message : String(e),
-        hint:
-          "Check firebase-admin dependency + FIREBASE_* env vars (private key formatting).",
-      });
+    const body = JSON.stringify({
+      ok: false,
+      error: e?.message || String(e),
+    });
+
+    res.statusCode = e?.statusCode || 500;
+    res.setHeader("Content-Type", "application/json");
+    res.end(body);
   }
-};
+}
