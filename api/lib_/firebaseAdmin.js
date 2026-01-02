@@ -14,16 +14,8 @@ export function getAdmin() {
   privateKey = privateKey.replace(/\\n/g, "\n");
 
   admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId,
-      clientEmail,
-      privateKey,
-    }),
+    credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
   });
 
   return admin;
-}
-
-export function db() {
-  return getAdmin().firestore();
 }
