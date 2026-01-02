@@ -1,6 +1,6 @@
-const admin = require("firebase-admin");
+import admin from "firebase-admin";
 
-function initAdmin() {
+export function getAdmin() {
   if (admin.apps.length) return admin;
 
   const projectId = process.env.FIREBASE_PROJECT_ID;
@@ -11,7 +11,6 @@ function initAdmin() {
     throw new Error("Missing Firebase Admin env vars");
   }
 
-  // Zorgt dat \n in env vars echte nieuwe regels worden
   privateKey = privateKey.replace(/\\n/g, "\n");
 
   admin.initializeApp({
@@ -25,4 +24,6 @@ function initAdmin() {
   return admin;
 }
 
-module.exports = { admin: initAdmin };
+export function db() {
+  return getAdmin().firestore();
+}
